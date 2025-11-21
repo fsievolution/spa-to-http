@@ -85,6 +85,16 @@ var Flags = []cli.Flag{
 		Name:    "no-compress",
 		Value:   nil,
 	},
+	&cli.StringFlag{
+		EnvVars: []string{"BASIC_AUTH"},
+		Name:    "basic-auth",
+		Value:   "",
+	},
+	&cli.StringFlag{
+		EnvVars: []string{"BASIC_AUTH_REALM"},
+		Name:    "basic-auth-realm",
+		Value:   "Restricted",
+	},
 }
 
 type Params struct {
@@ -102,6 +112,8 @@ type Params struct {
 	Logger                  bool
 	LogPretty               bool
 	NoCompress              []string
+	BasicAuth               string
+	BasicAuthRealm          string
 	//DirectoryListing        bool
 }
 
@@ -126,6 +138,8 @@ func ContextToParams(c *cli.Context) (*Params, error) {
 		Logger:                  c.Bool("logger"),
 		LogPretty:               c.Bool("log-pretty"),
 		NoCompress:              c.StringSlice("no-compress"),
+		BasicAuth:               c.String("basic-auth"),
+		BasicAuthRealm:          c.String("basic-auth-realm"),
 		//DirectoryListing:        c.Bool("directory-listing"),
 	}, nil
 }

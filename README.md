@@ -135,7 +135,7 @@ Ignore caching for some specific resources, e.g. prevent Service Worker caching 
 
 
 
-```diff 
+```diff
  trfk-vue:
     build: "spa"
 ++  command: --ignore-cache-control-paths "/sw.js"
@@ -146,6 +146,45 @@ Ignore caching for some specific resources, e.g. prevent Service Worker caching 
 ```
 
 This is not needed for most of your assets because their filenames should contain file hash (added by default by modern bundlers). So cache naturally invalidated by referencing hashed assets from uncachable html. However some special resources like service worker must be served on fixed URL without file hash in filename
+
+Enable HTTP Basic Authentication to protect your SPA:
+
+```diff
+ trfk-vue:
+    build: "spa"
+++  command: --basic-auth "admin:secretpassword"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.trfk-vue.rule=Host(`trfk-vue.localhost`)"
+      - "traefik.http.services.trfk-vue.loadbalancer.server.port=8080"
+```
+
+Or using environment variable:
+
+```diff
+ trfk-vue:
+    build: "spa"
+++  environment:
+++    - BASIC_AUTH=admin:secretpassword
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.trfk-vue.rule=Host(`trfk-vue.localhost`)"
+      - "traefik.http.services.trfk-vue.loadbalancer.server.port=8080"
+```
+
+Customize the authentication realm (the name shown in browser login dialogs):
+
+```diff
+ trfk-vue:
+    build: "spa"
+    environment:
+      - BASIC_AUTH=admin:secretpassword
+++    - BASIC_AUTH_REALM=My Application
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.trfk-vue.rule=Host(`trfk-vue.localhost`)"
+      - "traefik.http.services.trfk-vue.loadbalancer.server.port=8080"
+```
 
 
 
@@ -166,3 +205,5 @@ This is not needed for most of your assets because their filenames should contai
 | CACHE_BUFFER               | `--cache-buffer <number>`               | Specifies the maximum size of LRU cache in bytes                                                                                                                                                                                      | `51200`  |
 | LOGGER                     | `--logger`                              | Enable requests logger                                                                                                                                                                                                                | `false`  |
 | LOG_PRETTY                 | `--log-pretty`                          | Print log messages in a pretty format instead of default JSON format                                                                                                                                                                  | `false`  |
+| BASIC_AUTH                 | `--basic-auth <string>`                 | Enable HTTP Basic Authentication with credentials in format "username:password"                                                                                                                                                       |          |
+| BASIC_AUTH_REALM           | `--basic-auth-realm <string>`           | Set the realm name for HTTP Basic Authentication (shown in browser login prompt)                                                                                                                                                      | `Restricted` |

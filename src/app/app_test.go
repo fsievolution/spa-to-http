@@ -345,3 +345,113 @@ func TestGetFilePath(t *testing.T) {
 		t.Errorf("Expected false, got %t", valid)
 	}
 }
+
+func TestBasicAuthMiddleware(t *testing.T) {
+	params := param.Params{
+		Address:                 "0.0.0.0",
+		Port:                    8080,
+		Gzip:                    false,
+		Brotli:                  false,
+		Threshold:               1024,
+		Directory:               "../../test/frontend/dist",
+		CacheControlMaxAge:      604800,
+		SpaMode:                 true,
+		IgnoreCacheControlPaths: nil,
+		CacheEnabled:            true,
+		CacheBuffer:             50 * 1024,
+		BasicAuth:               "testuser:testpass",
+		BasicAuthRealm:          "Restricted",
+	}
+	app1 := app.NewApp(&params)
+
+	// Test without auth credentials - should return 401
+	req1, _ := http.NewRequest("GET", "/", nil)
+	recorder1 := httptest.NewRecorder()
+	handler1 := app1.BasicAuthMiddleware(http.HandlerFunc(app1.HandlerFuncNew))
+	handler1.ServeHTTP(recorder1, req1)
+	if recorder1.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", recorder1.Code)
+	}
+	if recorder1.HeaderMap["Www-Authenticate"][0] != `Basic realm="Restricted"` {
+		t.Errorf("Expected WWW-Authenticate header, got %s", recorder1.HeaderMap["Www-Authenticate"])
+	}
+
+	// Test with correct credentials - should return 200
+	req2, _ := http.NewRequest("GET", "/", nil)
+	req2.SetBasicAuth("testuser", "testpass")
+	recorder2 := httptest.NewRecorder()
+	handler2 := app1.BasicAuthMiddleware(http.HandlerFunc(app1.HandlerFuncNew))
+	handler2.ServeHTTP(recorder2, req2)
+	if recorder2.Code != http.StatusOK {
+		t.Errorf("Expected 200 OK, got %d", recorder2.Code)
+	}
+
+	// Test with incorrect username - should return 401
+	req3, _ := http.NewRequest("GET", "/", nil)
+	req3.SetBasicAuth("wronguser", "testpass")
+	recorder3 := httptest.NewRecorder()
+	handler3 := app1.BasicAuthMiddleware(http.HandlerFunc(app1.HandlerFuncNew))
+	handler3.ServeHTTP(recorder3, req3)
+	if recorder3.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", recorder3.Code)
+	}
+
+	// Test with incorrect password - should return 401
+	req4, _ := http.NewRequest("GET", "/", nil)
+	req4.SetBasicAuth("testuser", "wrongpass")
+	recorder4 := httptest.NewRecorder()
+	handler4 := app1.BasicAuthMiddleware(http.HandlerFunc(app1.HandlerFuncNew))
+	handler4.ServeHTTP(recorder4, req4)
+	if recorder4.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", recorder4.Code)
+	}
+
+	// Test with no BasicAuth configured - should allow through
+	params.BasicAuth = ""
+	app2 := app.NewApp(&params)
+	req5, _ := http.NewRequest("GET", "/", nil)
+	recorder5 := httptest.NewRecorder()
+	handler5 := app2.BasicAuthMiddleware(http.HandlerFunc(app2.HandlerFuncNew))
+	handler5.ServeHTTP(recorder5, req5)
+	if recorder5.Code != http.StatusOK {
+		t.Errorf("Expected 200 OK when no auth is configured, got %d", recorder5.Code)
+	}
+
+	// Test with invalid BasicAuth format - should allow through
+	params.BasicAuth = "invalidformat"
+	app3 := app.NewApp(&params)
+	req6, _ := http.NewRequest("GET", "/", nil)
+	recorder6 := httptest.NewRecorder()
+	handler6 := app3.BasicAuthMiddleware(http.HandlerFunc(app3.HandlerFuncNew))
+	handler6.ServeHTTP(recorder6, req6)
+	if recorder6.Code != http.StatusOK {
+		t.Errorf("Expected 200 OK when auth format is invalid, got %d", recorder6.Code)
+	}
+
+	// Test custom realm name
+	params.BasicAuth = "user:pass"
+	params.BasicAuthRealm = "My Custom Realm"
+	app4 := app.NewApp(&params)
+	req7, _ := http.NewRequest("GET", "/", nil)
+	recorder7 := httptest.NewRecorder()
+	handler7 := app4.BasicAuthMiddleware(http.HandlerFunc(app4.HandlerFuncNew))
+	handler7.ServeHTTP(recorder7, req7)
+	if recorder7.Code != http.StatusUnauthorized {
+		t.Errorf("Expected 401 Unauthorized, got %d", recorder7.Code)
+	}
+	if recorder7.HeaderMap["Www-Authenticate"][0] != `Basic realm="My Custom Realm"` {
+		t.Errorf("Expected custom realm 'My Custom Realm', got %s", recorder7.HeaderMap["Www-Authenticate"])
+	}
+
+	// Test default realm name when not specified
+	params.BasicAuth = "user:pass"
+	params.BasicAuthRealm = "Restricted"
+	app5 := app.NewApp(&params)
+	req8, _ := http.NewRequest("GET", "/", nil)
+	recorder8 := httptest.NewRecorder()
+	handler8 := app5.BasicAuthMiddleware(http.HandlerFunc(app5.HandlerFuncNew))
+	handler8.ServeHTTP(recorder8, req8)
+	if recorder8.HeaderMap["Www-Authenticate"][0] != `Basic realm="Restricted"` {
+		t.Errorf("Expected default realm 'Restricted', got %s", recorder8.HeaderMap["Www-Authenticate"])
+	}
+}

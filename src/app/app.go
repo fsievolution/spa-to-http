@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"compress/gzip"
+	"crypto/subtle"
 	"fmt"
 	"github.com/andybalholm/brotli"
 	lru "github.com/hashicorp/golang-lru"
@@ -298,8 +299,49 @@ func (app *App) HandlerFuncNew(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, responseItem.Name, responseItem.ModTime, bytes.NewReader(responseItem.Content))
 }
 
+func (app *App) BasicAuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if app.params.BasicAuth == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		parts := strings.SplitN(app.params.BasicAuth, ":", 2)
+		if len(parts) != 2 {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		expectedUsername := parts[0]
+		expectedPassword := parts[1]
+
+		username, password, ok := r.BasicAuth()
+		if !ok {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, app.params.BasicAuthRealm))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		usernameMatch := subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 1
+		passwordMatch := subtle.ConstantTimeCompare([]byte(password), []byte(expectedPassword)) == 1
+
+		if !usernameMatch || !passwordMatch {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Basic realm="%s"`, app.params.BasicAuthRealm))
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (app *App) Listen() {
 	var handlerFunc http.Handler = http.HandlerFunc(app.HandlerFuncNew)
+
+	if app.params.BasicAuth != "" {
+		handlerFunc = app.BasicAuthMiddleware(handlerFunc)
+	}
+
 	if app.params.Logger {
 		handlerFunc = util.LogRequestHandler(handlerFunc, &util.LogRequestHandlerOptions{
 			Pretty: app.params.LogPretty,
